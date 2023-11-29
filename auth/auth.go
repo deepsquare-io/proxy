@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/deepsquare-io/proxy/database/nonce"
-	"github.com/deepsquare-io/proxy/jwt"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
@@ -20,18 +19,15 @@ import (
 //
 // It uses a time-based nonce. The nonce is encrypted with the private key.
 type Auth struct {
-	jwtSecret jwt.Secret
-	nonces    nonce.Repository
+	nonces nonce.Repository
 }
 
 // NewAuth builds the Auth struct.
 func NewAuth(
-	jwtSecret jwt.Secret,
 	nonces nonce.Repository,
 ) *Auth {
 	return &Auth{
-		jwtSecret: jwtSecret,
-		nonces:    nonces,
+		nonces: nonces,
 	}
 }
 

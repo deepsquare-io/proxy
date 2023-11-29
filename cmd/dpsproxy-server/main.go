@@ -100,7 +100,7 @@ var app = &cli.App{
 		routes := route.NewRepository(d)
 
 		// Auth
-		authService := auth.NewAuth(jwt.Secret(jwtSecret), nonces)
+		authService := auth.NewAuth(nonces)
 
 		r.Get("/challenge", func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(w, authService.Challenge(r.Context(), "login"))
