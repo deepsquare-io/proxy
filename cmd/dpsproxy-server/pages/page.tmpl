@@ -94,6 +94,10 @@
     <header>
       <hgroup>
         <h1>DeepSquare Proxy</h1>
+        <h3>
+          {{ .RouteCount }} route{{ if gt .RouteCount 1 }}s{{ end }}
+          allocated.
+        </h3>
       </hgroup>
     </header>
 

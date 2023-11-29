@@ -20,3 +20,6 @@ INSERT INTO routes (user_address, route, port) VALUES (?, ?, ?);
 
 -- name: IsPortUsed :one
 SELECT COUNT(*) FROM routes WHERE port = ?;
+
+-- name: CountRoute :one
+SELECT COUNT(*) FROM routes;

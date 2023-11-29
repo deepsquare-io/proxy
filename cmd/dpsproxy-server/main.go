@@ -136,12 +136,32 @@ var app = &cli.App{
 				http.Error(w, "not found", http.StatusNotFound)
 				return
 			}
-			if err := t.ExecuteTemplate(w, "base", struct {
-				CSRFToken string
-			}{
-				CSRFToken: csrf.Token(r),
-			}); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+
+			// Special rules
+			switch path {
+			case "pages/page.tmpl":
+				count, err := routes.Count(r.Context())
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				if err := t.ExecuteTemplate(w, "base", struct {
+					CSRFToken  string
+					RouteCount int64
+				}{
+					CSRFToken:  csrf.Token(r),
+					RouteCount: count,
+				}); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				}
+			default:
+				if err := t.ExecuteTemplate(w, "base", struct {
+					CSRFToken string
+				}{
+					CSRFToken: csrf.Token(r),
+				}); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				}
 			}
 		}
 		r.Get("/*", renderFn)

@@ -36,6 +36,7 @@ func generateRandomPort() int64 {
 type Repository interface {
 	GenerateRoute(ctx context.Context, userAddress string) (route string, port int64, err error)
 	Get(ctx context.Context, userAddress string) (route string, port int64, err error)
+	Count(ctx context.Context) (int64, error)
 }
 
 // NewRepository wraps around a SQL database to execute the route methods.
@@ -120,4 +121,9 @@ func (r *repository) Get(
 		return "", 0, err
 	}
 	return resp.Route, resp.Port, nil
+}
+func (r *repository) Count(
+	ctx context.Context,
+) (int64, error) {
+	return r.Queries.CountRoute(ctx)
 }

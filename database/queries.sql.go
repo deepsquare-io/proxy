@@ -10,6 +10,17 @@ import (
 	"time"
 )
 
+const countRoute = `-- name: CountRoute :one
+SELECT COUNT(*) FROM routes
+`
+
+func (q *Queries) CountRoute(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countRoute)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createNonce = `-- name: CreateNonce :exec
 INSERT INTO nonces (nonce, expiration) VALUES (?, ?)
 `
