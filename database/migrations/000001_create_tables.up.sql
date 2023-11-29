@@ -1,0 +1,14 @@
+PRAGMA foreign_keys = ON;
+BEGIN TRANSACTION;
+CREATE TABLE IF NOT EXISTS nonces (
+  nonce VARCHAR(255) NOT NULL PRIMARY KEY,
+  expiration TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS routes (
+  user_address VARCHAR(255) NOT NULL,
+  route VARCHAR(255) NOT NULL,
+  port INTEGER NOT NULL,
+  PRIMARY KEY (user_address, route, port)
+);
+COMMIT;

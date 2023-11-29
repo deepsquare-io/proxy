@@ -1,0 +1,57 @@
+{{ define "base" }}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta hx-preserve="true" charset="UTF-8" />
+    <meta
+      hx-preserve="true"
+      name="viewport"
+      content="width=device-width, initial-scale=1"
+    />
+    <script
+      async
+      hx-preserve="true"
+      src="https://analytics.eu.umami.is/script.js"
+      data-website-id="71e8b68b-47ea-4312-9e00-e83366193ddf"
+    ></script>
+    <script
+      hx-preserve="true"
+      src="https://unpkg.com/htmx.org@1.9.9"
+      integrity="sha384-QFjmbokDn2DjBjq+fM+8LUIVrAgqcNW2s0PjAxHETgRn9l4fvX31ZxDxvwQnyMOX"
+      crossorigin="anonymous"
+    ></script>
+    <link
+      hx-preserve="true"
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@next/css/pico.classless.min.css"
+    />
+    <script
+      hx-preserve="true"
+      src="https://unpkg.com/htmx.org@1.9.9/dist/ext/head-support.js"
+      integrity="sha384-CtqhRhV1bHrqMSWc8cQGQL4epjUqCHjq/kJ9ztGHS39vO/1phOgyhFIieE87UKMu"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      hx-preserve="true"
+      src="https://unpkg.com/hyperscript.org@0.9.12"
+      integrity="sha384-+Uth1QzYJsTjnS5SXVN3fFO4I32Y571xIuv53WJ2SA7y5/36tKU1VCutONAmg5eH"
+      crossorigin="anonymous"
+    ></script>
+    <style hx-preserve="true">
+      body > header {
+        padding-top: 2em;
+        padding-bottom: 0;
+      }
+
+      body > footer {
+        padding-top: 0;
+        padding-bottom: 2em;
+      }
+    </style>
+    {{ template "head" . }}
+  </head>
+  <body hx-history="false" hx-ext="head-support">
+    {{ template "body" . }}
+  </body>
+</html>
+{{ end }}
