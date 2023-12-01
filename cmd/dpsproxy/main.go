@@ -76,9 +76,8 @@ var app = &cli.App{
 				if reconnect {
 					if errors.Is(err, io.EOF) {
 						return nil
-					} else {
-						log.Err(err).Msg("client failure")
 					}
+					log.Err(err).Msg("client failure")
 					select {
 					case <-time.After(time.Second * 10):
 						continue

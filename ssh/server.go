@@ -306,11 +306,10 @@ func (c *client) handleTCPIPForward(
 			if errors.As(err, &netErr) && netErr.Timeout() {
 				c.log.Warn().Err(err).Msg("accept failed with timeout")
 				continue
-			} else {
-				c.log.Warn().Err(err).Msg("accept failed")
-
-				return err
 			}
+			c.log.Warn().Err(err).Msg("accept failed")
+
+			return err
 		}
 
 		go func() {
@@ -382,6 +381,8 @@ func (c *client) pipe(ctx context.Context, ch ssh.Channel, conn net.Conn) error 
 	return ctx.Err()
 }
 
+// ForwardHTTP is a middleware that forwards HTTP request based on the subdomain
+// to a corresponding SSH client.
 func (s *Server) ForwardHTTP(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)

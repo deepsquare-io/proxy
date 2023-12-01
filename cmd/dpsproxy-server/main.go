@@ -1,6 +1,4 @@
-/*
-Auth Web3 HTMX is a simple demonstration of Web3 in combination with HTMX, written in Go.
-*/package main
+package main
 
 import (
 	"context"
