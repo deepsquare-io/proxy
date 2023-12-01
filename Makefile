@@ -27,6 +27,9 @@ ifeq ($(sqlc),)
 sqlc := $(shell go env GOPATH)/bin/sqlc
 endif
 
+.PHONY: build
+build: bin/dpsproxy-server bin/dpsproxy
+
 .PHONY: bin/dpsproxy-server
 bin/dpsproxy-server: $(GO_SRCS)
 	go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy-server/main.go

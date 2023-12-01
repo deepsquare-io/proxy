@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
+	"errors"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/deepsquare-io/proxy/client"
 	"github.com/joho/godotenv"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v2"
 )
@@ -70,8 +74,17 @@ var app = &cli.App{
 		for {
 			if err := client.Run(ctx); err != nil {
 				if reconnect {
-					log.Err(err).Msg("client failure")
-					continue
+					if errors.Is(err, io.EOF) {
+						return nil
+					} else {
+						log.Err(err).Msg("client failure")
+					}
+					select {
+					case <-time.After(time.Second * 10):
+						continue
+					case <-ctx.Done():
+						return err
+					}
 				}
 				return err
 			}
@@ -80,7 +93,7 @@ var app = &cli.App{
 }
 
 func main() {
-	log.Logger = log.With().Caller().Logger()
+	log.Logger = log.With().Caller().Logger().Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	_ = godotenv.Load(".env.local")
 	_ = godotenv.Load(".env")
 	if err := app.Run(os.Args); err != nil {

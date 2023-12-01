@@ -2,12 +2,14 @@ package client
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"os"
 	"time"
 
 	"github.com/deepsquare-io/proxy/api"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/sync/errgroup"
 )
@@ -18,8 +20,8 @@ type BoreClient struct {
 	sshClient *ssh.Client
 	dialer    *net.Dialer
 
-	remoteAddress string
-	localAddress  string
+	remoteAddress string // Remote SSH server
+	localAddress  string // Local SSH server
 	secret        string
 	keepAlive     bool
 }
@@ -51,6 +53,7 @@ func (c *BoreClient) Run(ctx context.Context) error {
 	_ = local.Close()
 
 	// SSH Client
+	// Contact server
 	remote, err := c.dialer.DialContext(ctx, "tcp", c.remoteAddress)
 	if err != nil {
 		return err
@@ -59,10 +62,15 @@ func (c *BoreClient) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	go func() {
+		<-ctx.Done()
+		_ = sshConn.Close()
+	}()
 	c.sshClient = ssh.NewClient(sshConn, chans, reqs)
 
 	// Send secret
 	if c.secret != "" {
+		// Send identity for port opening
 		if _, _, err = c.sshClient.SendRequest(
 			"set-id",
 			true,
@@ -88,6 +96,11 @@ func (c *BoreClient) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	go func() {
+		<-ctx.Done()
+		_ = session.Close()
+	}()
+
 	stdout, err := session.StdoutPipe()
 	if err != nil {
 		return err
@@ -99,10 +112,15 @@ func (c *BoreClient) Run(ctx context.Context) error {
 		return err
 	})
 
-	listener, err := c.sshClient.Listen("tcp", c.remoteAddress)
+	// Listen on any IP from the server (which contains forwarded IP!)
+	listener, err := c.sshClient.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
 		return err
 	}
+	go func() {
+		<-ctx.Done()
+		_ = listener.Close()
+	}()
 
 	g.Go(func() error {
 		defer listener.Close()
@@ -117,7 +135,13 @@ func (c *BoreClient) Run(ctx context.Context) error {
 				return err
 			}
 
-			go handleClient(ctx, local, client)
+			go func() {
+				if err := handleClient(ctx, local, client); err != nil {
+					if !errors.Is(err, context.Canceled) && errors.Is(err, io.EOF) {
+						log.Err(err).Msg("connection ended with error")
+					}
+				}
+			}()
 		}
 	})
 

@@ -3,13 +3,24 @@ Auth Web3 HTMX is a simple demonstration of Web3 in combination with HTMX, writt
 */package main
 
 import (
+	"context"
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"database/sql"
 	"encoding/hex"
+	"encoding/pem"
+	"errors"
 	"fmt"
-	"html/template"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
+	"text/template"
 
 	"embed"
 
@@ -19,6 +30,7 @@ import (
 	"github.com/deepsquare-io/proxy/database/route"
 	"github.com/deepsquare-io/proxy/handler"
 	"github.com/deepsquare-io/proxy/jwt"
+	proxyssh "github.com/deepsquare-io/proxy/ssh"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/csrf"
 	"github.com/joho/godotenv"
@@ -26,6 +38,7 @@ import (
 	"github.com/rs/zerolog/hlog"
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/crypto/ssh"
 )
 
 var (
@@ -36,19 +49,117 @@ var (
 	jwtSecret    string
 	publicDomain string
 
+	sshListenAddress  string
+	httpListenAddress string
+	keysDir           string
+
+	insecure bool
+
 	dbFile string
 )
+
+func generateKeyPair(dirPath string, keyType string) (filePath string, err error) {
+	var data []byte
+
+	filePath = filepath.Join(dirPath, "ssh_host_"+keyType+"_key")
+	if _, err := os.Stat(filePath); !errors.Is(err, os.ErrNotExist) {
+		log.Info().Str("path", filePath).Msg("key exist")
+		return filePath, nil
+	}
+
+	privateKeyFile, err := os.Create(filePath)
+	if err != nil {
+		return filePath, err
+	}
+	defer func() {
+		_ = privateKeyFile.Close()
+		_ = os.Chmod(filePath, 0600)
+	}()
+
+	switch keyType {
+	case "rsa":
+		privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			return filePath, err
+		}
+		data = x509.MarshalPKCS1PrivateKey(privateKey)
+		if err = pem.Encode(privateKeyFile, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: data}); err != nil {
+			return filePath, err
+		}
+	case "ecdsa":
+		privateKey, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
+		if err != nil {
+			return filePath, err
+		}
+		data, err = x509.MarshalECPrivateKey(privateKey)
+		if err != nil {
+			return filePath, err
+		}
+		if err = pem.Encode(privateKeyFile, &pem.Block{Type: "EC PRIVATE KEY", Bytes: data}); err != nil {
+			return filePath, err
+		}
+	case "ed25519":
+		_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			return filePath, err
+		}
+		data, err = x509.MarshalPKCS8PrivateKey(privateKey)
+		if err != nil {
+			return filePath, err
+		}
+		if err = pem.Encode(privateKeyFile, &pem.Block{Type: "PRIVATE KEY", Bytes: data}); err != nil {
+			return filePath, err
+		}
+	default:
+		return filePath, fmt.Errorf("unsupported key type: %s", keyType)
+	}
+	return filePath, err
+}
+
+func loadKey(config *ssh.ServerConfig, filePath string) error {
+	pk, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+	private, err := ssh.ParsePrivateKey(pk)
+	if err != nil {
+		return err
+	}
+	config.AddHostKey(private)
+	return nil
+}
 
 var app = &cli.App{
 	Name:    "dpsproxy-server",
 	Version: version,
-	Usage:   "Demo of Auth and HTMX.",
+	Usage:   "DeepSquare dynamic reverse proxy.",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:        "public-domain",
 			Usage:       "The public domain name of this server.",
 			Destination: &publicDomain,
 			EnvVars:     []string{"PUBLIC_DOMAIN"},
+		},
+		&cli.StringFlag{
+			Name:        "http.listenAddress",
+			Usage:       "The HTTP server listening address.",
+			Destination: &httpListenAddress,
+			Value:       ":3000",
+			EnvVars:     []string{"HTTP_LISTEN_ADDRESS"},
+		},
+		&cli.StringFlag{
+			Name:        "ssh.listenAddress",
+			Usage:       "The SSH server listening address.",
+			Destination: &sshListenAddress,
+			Value:       ":2200",
+			EnvVars:     []string{"SSH_LISTEN_ADDRESS"},
+		},
+		&cli.StringFlag{
+			Name:        "ssh.keysDir",
+			Usage:       "A directory used to store host keys.",
+			Destination: &keysDir,
+			Value:       "./",
+			EnvVars:     []string{"KEYS_DIR"},
 		},
 		&cli.StringFlag{
 			Name:  "csrf.secret",
@@ -76,10 +187,52 @@ var app = &cli.App{
 			Usage:       "SQLite3 database file path.",
 			EnvVars:     []string{"DB_PATH"},
 		},
+		&cli.BoolFlag{
+			Name:        "insecure",
+			Value:       false,
+			Destination: &insecure,
+			Usage:       "Allow CSRF tokens in insecure connections.",
+		},
 	},
 	Suggest: true,
 	Action: func(cCtx *cli.Context) error {
+		ctx := cCtx.Context
+		ctx, cancel := context.WithCancel(ctx)
+
 		log.Level(zerolog.DebugLevel)
+
+		// Handle cancellation
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-ch
+			cancel()
+		}()
+
+		// SSH config
+		var config ssh.ServerConfig
+		_ = os.MkdirAll(keysDir, 0700)
+		filePath, err := generateKeyPair(keysDir, "rsa")
+		if err != nil {
+			return err
+		}
+		if err := loadKey(&config, filePath); err != nil {
+			return err
+		}
+		filePath, err = generateKeyPair(keysDir, "ecdsa")
+		if err != nil {
+			return err
+		}
+		if err := loadKey(&config, filePath); err != nil {
+			return err
+		}
+		filePath, err = generateKeyPair(keysDir, "ed25519")
+		if err != nil {
+			return err
+		}
+		if err := loadKey(&config, filePath); err != nil {
+			return err
+		}
 
 		// Router
 		r := chi.NewRouter()
@@ -166,13 +319,25 @@ var app = &cli.App{
 		}
 		r.Get("/*", renderFn)
 
+		go func() {
+			server := proxyssh.NewServer(
+				sshListenAddress,
+				&config,
+				jwt.Secret(jwtSecret),
+				routes,
+				publicDomain,
+			)
+			err := server.Serve(ctx)
+			log.Fatal().Err(err).Msg("ssh crashed")
+		}()
+
 		log.Info().Msg("listening")
-		return http.ListenAndServe(":3000", csrf.Protect(key)(r))
+		return http.ListenAndServe(httpListenAddress, csrf.Protect(key, csrf.Secure(!insecure))(r))
 	},
 }
 
 func main() {
-	log.Logger = log.With().Caller().Logger()
+	log.Logger = log.With().Caller().Logger().Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	_ = godotenv.Load(".env.local")
 	_ = godotenv.Load(".env")
 	if err := app.Run(os.Args); err != nil {
