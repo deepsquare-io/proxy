@@ -163,6 +163,6 @@ jobs:
 
       - name: Create release and upload binaries
         if: startsWith(github.ref, 'refs/tags/')
-        run: gh release create ${{ steps.branch_name.outputs.VERSION }} -t ${{ steps.branch_name.outputs.VERSION }} -F bin/checksums.md --prerelease=${{ contains(steps.get_version.outputs.VERSION, '-') }} bin/dpsproxy-* bin/checksums.txt
+        run: gh release create ${{ steps.get_version.outputs.VERSION }} -t ${{ steps.get_version.outputs.VERSION }} -F bin/checksums.md --prerelease=${{ contains(steps.get_version.outputs.VERSION, '-') }} bin/dpsproxy-* bin/checksums.txt
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
