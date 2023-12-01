@@ -42,7 +42,7 @@ var app = &cli.App{
 		},
 		&cli.BoolFlag{
 			Name:        "keep-alive",
-			Usage:       "Local address to be forwarded.",
+			Usage:       "Keep the tunnel alive by pinging continuously.",
 			Destination: &keepAlive,
 		},
 		&cli.StringFlag{
