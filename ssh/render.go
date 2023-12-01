@@ -8,7 +8,8 @@ import (
 )
 
 var primaryColor = lipgloss.Color("#9202de")
-var borderStyle = lipgloss.NewStyle().Foreground(primaryColor).Padding(1)
+var borderStyle = lipgloss.NewStyle().Foreground(primaryColor)
+var cellStyle = lipgloss.NewStyle().PaddingRight(1).PaddingLeft(1)
 
 func renderOutput(route string, domain string, port int64) string {
 	rows := [][]string{
@@ -21,6 +22,9 @@ func renderOutput(route string, domain string, port int64) string {
 		Border(lipgloss.NormalBorder()).
 		BorderStyle(borderStyle).
 		Headers("Protocol", "URL").
+		StyleFunc(func(row, col int) lipgloss.Style {
+			return cellStyle
+		}).
 		Rows(rows...).
 		Render() +
 		"\n"

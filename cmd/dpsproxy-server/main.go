@@ -53,7 +53,8 @@ var (
 	httpListenAddress string
 	keysDir           string
 
-	insecure bool
+	insecure  bool
+	anonymous bool
 
 	dbFile string
 )
@@ -193,6 +194,12 @@ var app = &cli.App{
 			Destination: &insecure,
 			Usage:       "Allow CSRF tokens in insecure connections.",
 		},
+		&cli.BoolFlag{
+			Name:        "anonymous",
+			Value:       false,
+			Destination: &anonymous,
+			Usage:       "Allow anonymous login.",
+		},
 	},
 	Suggest: true,
 	Action: func(cCtx *cli.Context) error {
@@ -319,20 +326,25 @@ var app = &cli.App{
 		}
 		r.Get("/*", renderFn)
 
+		server := proxyssh.NewServer(
+			sshListenAddress,
+			&config,
+			jwt.Secret(jwtSecret),
+			routes,
+			publicDomain,
+			anonymous,
+		)
+
 		go func() {
-			server := proxyssh.NewServer(
-				sshListenAddress,
-				&config,
-				jwt.Secret(jwtSecret),
-				routes,
-				publicDomain,
-			)
 			err := server.Serve(ctx)
 			log.Fatal().Err(err).Msg("ssh crashed")
 		}()
 
 		log.Info().Msg("listening")
-		return http.ListenAndServe(httpListenAddress, csrf.Protect(key, csrf.Secure(!insecure))(r))
+		return http.ListenAndServe(
+			httpListenAddress,
+			server.ForwardHTTP(csrf.Protect(key, csrf.Secure(!insecure))(r)),
+		)
 	},
 }
 

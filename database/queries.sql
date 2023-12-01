@@ -9,8 +9,11 @@ UPDATE nonces SET expiration = ? WHERE nonce = ? RETURNING nonce;
 
 ---
 
--- name: GetRoute :one
+-- name: GetRouteByUserAddress :one
 SELECT * FROM routes WHERE user_address = ? LIMIT 1;
+
+-- name: GetRoute :one
+SELECT * FROM routes WHERE route = ? LIMIT 1;
 
 -- name: SetRoute :one
 UPDATE routes SET route = ?, port = ? WHERE user_address = ? RETURNING route;

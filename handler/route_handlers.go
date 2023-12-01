@@ -99,11 +99,13 @@ func GenerateRoute(
 		var route string
 		var port int64
 		if refresh {
-			route, port, err = routes.Get(r.Context(), rep.Address)
+			r, err := routes.GetByUserAddress(r.Context(), rep.Address)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			route = r.Route
+			port = r.Port
 		}
 		if route == "" {
 			route, port, err = routes.GenerateRoute(r.Context(), rep.Address)
@@ -139,12 +141,12 @@ func RetrieveRoute(
 			return
 		}
 
-		route, port, err := routes.Get(r.Context(), claims.UserID)
+		rr, err := routes.GetByUserAddress(r.Context(), claims.UserID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		fmt.Fprint(w, formatResponse(publicDomain, route, port, token, claims.ExpiresAt.Time))
+		fmt.Fprint(w, formatResponse(publicDomain, rr.Route, rr.Port, token, claims.ExpiresAt.Time))
 	}
 }

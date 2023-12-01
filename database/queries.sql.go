@@ -67,13 +67,24 @@ func (q *Queries) GetNonce(ctx context.Context, arg GetNonceParams) (Nonce, erro
 }
 
 const getRoute = `-- name: GetRoute :one
+SELECT user_address, route, port FROM routes WHERE route = ? LIMIT 1
+`
+
+func (q *Queries) GetRoute(ctx context.Context, route string) (Route, error) {
+	row := q.db.QueryRowContext(ctx, getRoute, route)
+	var i Route
+	err := row.Scan(&i.UserAddress, &i.Route, &i.Port)
+	return i, err
+}
+
+const getRouteByUserAddress = `-- name: GetRouteByUserAddress :one
 
 SELECT user_address, route, port FROM routes WHERE user_address = ? LIMIT 1
 `
 
 // -
-func (q *Queries) GetRoute(ctx context.Context, userAddress string) (Route, error) {
-	row := q.db.QueryRowContext(ctx, getRoute, userAddress)
+func (q *Queries) GetRouteByUserAddress(ctx context.Context, userAddress string) (Route, error) {
+	row := q.db.QueryRowContext(ctx, getRouteByUserAddress, userAddress)
 	var i Route
 	err := row.Scan(&i.UserAddress, &i.Route, &i.Port)
 	return i, err

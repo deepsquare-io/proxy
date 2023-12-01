@@ -7,13 +7,19 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/deepsquare-io/proxy/api"
 	"github.com/deepsquare-io/proxy/database/route"
 	"github.com/deepsquare-io/proxy/jwt"
+	"github.com/deepsquare-io/proxy/utils"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/yhat/wsutil"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/sync/errgroup"
 )
@@ -26,9 +32,11 @@ type client struct {
 	channelMu sync.RWMutex
 
 	// Dependencies
-	jwt    jwt.Secret
-	routes route.Repository
-	domain string
+	jwt           jwt.Secret
+	routes        route.Repository
+	domain        string
+	indexedRoutes map[string]string
+	anonymous     bool
 
 	log zerolog.Logger
 }
@@ -72,9 +80,13 @@ type Server struct {
 	addr string
 	*ssh.ServerConfig
 
-	jwt    jwt.Secret
-	routes route.Repository
-	domain string
+	jwt       jwt.Secret
+	routes    route.Repository
+	domain    string
+	anonymous bool
+
+	// map subdomain to address
+	indexedRoutes map[string]string
 }
 
 // NewServer instanciates a new ssh server with tcp forwarding.
@@ -84,14 +96,17 @@ func NewServer(
 	jwt jwt.Secret,
 	routes route.Repository,
 	domain string,
+	anonymous bool,
 ) *Server {
 	config.NoClientAuth = true
 	return &Server{
-		addr:         listenAddress,
-		ServerConfig: config,
-		jwt:          jwt,
-		routes:       routes,
-		domain:       domain,
+		addr:          listenAddress,
+		ServerConfig:  config,
+		jwt:           jwt,
+		routes:        routes,
+		domain:        domain,
+		anonymous:     anonymous,
+		indexedRoutes: make(map[string]string),
 	}
 }
 
@@ -139,9 +154,11 @@ func (s *Server) Serve(ctx context.Context) error {
 			}
 			defer sshConn.Close()
 			client := &client{
-				jwt:    s.jwt,
-				routes: s.routes,
-				domain: s.domain,
+				jwt:           s.jwt,
+				routes:        s.routes,
+				domain:        s.domain,
+				indexedRoutes: s.indexedRoutes,
+				anonymous:     s.anonymous,
 
 				log: log.With().Str("remote", conn.RemoteAddr().String()).Logger(),
 			}
@@ -188,26 +205,28 @@ func (c *client) handleRequests(
 }
 
 func (c *client) handleSetID(req *ssh.Request) {
+	// Reply as true to ignore use user-less instead.
+
 	var payload api.IDRequest
 	if err := ssh.Unmarshal(req.Payload, &payload); err != nil {
 		c.log.Err(err).Str("payload", string(req.Payload)).Msg("failed to unmarshal request")
-		_ = req.Reply(false, []byte{})
+		_ = req.Reply(true, []byte{})
 		return
 	}
 	if payload.ID == "" {
 		c.log.Warn().Str("payload", string(req.Payload)).Msg("set-id payload is empty")
-		_ = req.Reply(false, []byte{})
+		_ = req.Reply(true, []byte{})
 		return
 	}
 
 	claims, err := c.jwt.VerifyToken(payload.ID)
 	if err != nil {
 		c.log.Err(err).Str("token", payload.ID).Msg("failed jwt verification")
-		_ = req.Reply(false, []byte{})
+		_ = req.Reply(true, []byte{})
 		return
 	}
-
 	c.setClaims(claims)
+
 	c.log = c.log.With().Str("id", claims.UserID).Logger()
 
 	_ = req.Reply(true, []byte{})
@@ -227,13 +246,39 @@ func (c *client) handleTCPIPForward(
 	}
 
 	claims := c.getClaims()
-	route, port, err := c.routes.Get(ctx, claims.UserID)
-	if err != nil {
-		c.log.Err(err).Str("address", claims.UserID).Msg("failed to fetch route")
-		_ = req.Reply(false, []byte{})
-		return err
+	var route string
+	var port int64
+	var err error
+	if claims != nil {
+		r, err := c.routes.GetByUserAddress(ctx, claims.UserID)
+		if err != nil {
+			c.log.Err(err).Str("address", claims.UserID).Msg("failed to fetch route")
+			_ = req.Reply(false, []byte{})
+			return err
+		}
+		route = r.Route
+		port = r.Port
+	} else {
+		if c.anonymous {
+			route = utils.GenerateSubdomain()
+			port = utils.GenerateSafeRandomPort()
+		} else {
+			c.log.Error().Msg("anonymous login is not allowed")
+			_ = req.Reply(false, []byte{})
+			return err
+		}
 	}
+
 	listenAddress := fmt.Sprintf("%s:%d", payload.Addr, port)
+
+	// Indexing so it can be used with http
+	c.indexedRoutes[route] = listenAddress
+	log.Warn().Str("route", route).Msg("route added")
+	defer func() {
+		log.Warn().Str("route", route).Msg("route deleted")
+		delete(c.indexedRoutes, route)
+	}()
+
 	listener, err := lc.Listen(ctx, "tcp", listenAddress)
 	if err != nil {
 		c.log.Err(err).Str("listenAddress", listenAddress).Msg("cannot open port for client")
@@ -335,4 +380,36 @@ func (c *client) pipe(ctx context.Context, ch ssh.Channel, conn net.Conn) error 
 	// Exit on first error
 	<-ctx.Done()
 	return ctx.Err()
+}
+
+func (s *Server) ForwardHTTP(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.Host)
+		if err != nil {
+			host = r.Host
+		}
+
+		if subdomain, _, ok := strings.Cut(host, "."); host != s.domain && ok {
+			if addr, ok := s.indexedRoutes[subdomain]; ok {
+				w.Header().Set("X-Proxy", "bore")
+
+				if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+					url := &url.URL{
+						Scheme: "ws",
+						Host:   addr,
+					}
+					proxy := wsutil.NewSingleHostReverseProxy(url)
+					proxy.ServeHTTP(w, r)
+					return
+				}
+
+				url := &url.URL{Scheme: "http", Host: addr}
+				proxy := httputil.NewSingleHostReverseProxy(url)
+				proxy.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
