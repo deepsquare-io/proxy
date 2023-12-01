@@ -38,6 +38,70 @@ bin/dpsproxy-server: $(GO_SRCS)
 bin/dpsproxy: $(GO_SRCS)
 	go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy/main.go
 
+
+bin/checksums.txt: $(addprefix bin/,$(bins))
+	sha256sum -b $(addprefix bin/,$(bins)) | sed 's/bin\///' > $@
+
+bin/checksums.md: bin/checksums.txt
+	@echo "### SHA256 Checksums" > $@
+	@echo >> $@
+	@echo "\`\`\`" >> $@
+	@cat $< >> $@
+	@echo "\`\`\`" >> $@
+
+bin/dpsproxy-server-darwin-amd64: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy-server/main.go
+
+bin/dpsproxy-server-darwin-arm64: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy-server/main.go
+
+bin/dpsproxy-server-freebsd-amd64: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy-server/main.go
+
+bin/dpsproxy-server-freebsd-arm64: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy-server/main.go
+
+bin/dpsproxy-server-linux-amd64: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy-server/main.go
+
+bin/dpsproxy-server-linux-arm64: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy-server/main.go
+
+bin/dpsproxy-server-linux-riscv64: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy-server/main.go
+
+bin/dpsproxy-server-windows-amd64.exe: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy-server/main.go
+
+bin/dpsproxy-darwin-amd64: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy/main.go
+
+bin/dpsproxy-darwin-arm64: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy/main.go
+
+bin/dpsproxy-freebsd-amd64: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy/main.go
+
+bin/dpsproxy-freebsd-arm64: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=freebsd GOARCH=arm64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy/main.go
+
+bin/dpsproxy-linux-amd64: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy/main.go
+
+bin/dpsproxy-linux-arm64: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy/main.go
+
+bin/dpsproxy-linux-riscv64: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=linux GOARCH=riscv64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy/main.go
+
+bin/dpsproxy-windows-amd64.exe: $(GO_SRCS)
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X main.version=${VERSION}" -o "$@" ./cmd/dpsproxy/main.go
+
+bins := dpsproxy-server-darwin-amd64 dpsproxy-server-darwin-arm64 dpsproxy-server-freebsd-arm64 dpsproxy-server-freebsd-arm64 dpsproxy-server-linux-amd64 dpsproxy-server-linux-arm64 dpsproxy-server-linux-riscv64 dpsproxy-server-windows-amd64.exe dpsproxy-darwin-amd64 dpsproxy-darwin-arm64 dpsproxy-freebsd-arm64 dpsproxy-freebsd-arm64 dpsproxy-linux-amd64 dpsproxy-linux-arm64 dpsproxy-linux-riscv64 dpsproxy-windows-amd64.exe
+
+.PHONY: build-all
+build-all: $(addprefix bin/,$(bins)) bin/checksums.md
+
 .PHONY: run
 run: bin/dpsproxy-server
 	@bin/dpsproxy-server
