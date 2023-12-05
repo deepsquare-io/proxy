@@ -23,6 +23,7 @@ type Claims struct {
 	Nonce    string `json:"nonce"`
 }
 
+// Service handles common JWT manipulation.
 type Service struct {
 	Secret []byte
 	Nonces nonce.Repository

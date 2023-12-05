@@ -30,8 +30,10 @@ func generateNonce() (string, error) {
 	return nonceString, nil
 }
 
+// GenerateOption is the interface for the options of Generate method.
 type GenerateOption func(*GenerateOptions)
 
+// GenerateOptions contains the options for the Generate method.
 type GenerateOptions struct {
 	expiration time.Duration
 	ref        string
@@ -47,12 +49,14 @@ func applyGenerateOptions(opts []GenerateOption) *GenerateOptions {
 	return o
 }
 
+// WithExpiration sets the expiration time of a nonce.
 func WithExpiration(expiration time.Duration) GenerateOption {
 	return func(o *GenerateOptions) {
 		o.expiration = expiration
 	}
 }
 
+// WithRef sets a reference to a nonce.
 func WithRef(ref string) GenerateOption {
 	return func(o *GenerateOptions) {
 		o.ref = ref
