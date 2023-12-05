@@ -10,9 +10,9 @@ require (
 	github.com/go-chi/chi/v5 v5.0.10
 	github.com/golang-jwt/jwt/v5 v5.2.0
 	github.com/golang-migrate/migrate/v4 v4.16.2
+	github.com/google/uuid v1.4.0
 	github.com/gorilla/csrf v1.7.2
 	github.com/joho/godotenv v1.5.1
-	github.com/lithammer/shortuuid/v4 v4.0.0
 	github.com/rs/zerolog v1.31.0
 	github.com/sqlc-dev/sqlc v1.23.0
 	github.com/urfave/cli/v2 v2.26.0
@@ -105,7 +105,6 @@ require (
 	github.com/google/go-github/v39 v39.2.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/s2a-go v0.1.4 // indirect
-	github.com/google/uuid v1.4.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect
 	github.com/googleapis/gax-go/v2 v2.11.0 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect

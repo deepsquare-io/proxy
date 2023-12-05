@@ -1,8 +1,11 @@
 -- name: GetNonce :one
 SELECT * FROM nonces WHERE nonce = ? AND expiration > ? LIMIT 1;
 
+-- name: DeleteNoncesByRef :exec
+DELETE FROM nonces WHERE ref = ?;
+
 -- name: CreateNonce :exec
-INSERT INTO nonces (nonce, expiration) VALUES (?, ?);
+INSERT INTO nonces (nonce, expiration, ref) VALUES (?, ?, ?);
 
 -- name: UpdateNonce :one
 UPDATE nonces SET expiration = ? WHERE nonce = ? RETURNING nonce;

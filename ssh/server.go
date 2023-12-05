@@ -32,7 +32,7 @@ type client struct {
 	channelMu sync.RWMutex
 
 	// Dependencies
-	jwt           jwt.Secret
+	jwt           jwt.Service
 	routes        route.Repository
 	domain        string
 	indexedRoutes map[string]string
@@ -80,7 +80,7 @@ type Server struct {
 	addr string
 	*ssh.ServerConfig
 
-	jwt       jwt.Secret
+	jwt       jwt.Service
 	routes    route.Repository
 	domain    string
 	anonymous bool
@@ -93,7 +93,7 @@ type Server struct {
 func NewServer(
 	listenAddress string,
 	config *ssh.ServerConfig,
-	jwt jwt.Secret,
+	jwt jwt.Service,
 	routes route.Repository,
 	domain string,
 	anonymous bool,
@@ -185,7 +185,7 @@ func (c *client) handleRequests(
 	for req := range reqs {
 		switch req.Type {
 		case "set-id":
-			c.handleSetID(req)
+			c.handleSetID(ctx, req)
 			continue
 
 		case "tcpip-forward":
@@ -204,25 +204,25 @@ func (c *client) handleRequests(
 	return nil
 }
 
-func (c *client) handleSetID(req *ssh.Request) {
+func (c *client) handleSetID(ctx context.Context, req *ssh.Request) {
 	// Reply as true to ignore use user-less instead.
 
 	var payload api.IDRequest
 	if err := ssh.Unmarshal(req.Payload, &payload); err != nil {
 		c.log.Err(err).Str("payload", string(req.Payload)).Msg("failed to unmarshal request")
-		_ = req.Reply(true, []byte{})
+		_ = req.Reply(false, []byte{})
 		return
 	}
 	if payload.ID == "" {
 		c.log.Warn().Str("payload", string(req.Payload)).Msg("set-id payload is empty")
-		_ = req.Reply(true, []byte{})
+		_ = req.Reply(false, []byte{})
 		return
 	}
 
-	claims, err := c.jwt.VerifyToken(payload.ID)
+	claims, err := c.jwt.VerifyToken(ctx, payload.ID)
 	if err != nil {
 		c.log.Err(err).Str("token", payload.ID).Msg("failed jwt verification")
-		_ = req.Reply(true, []byte{})
+		_ = req.Reply(false, []byte{})
 		return
 	}
 	c.setClaims(claims)

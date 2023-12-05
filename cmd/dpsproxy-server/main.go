@@ -265,13 +265,13 @@ var app = &cli.App{
 		})
 
 		// Backend
+		jwt := jwt.Service{
+			Secret: []byte(jwtSecret),
+			Nonces: nonces,
+		}
 		r.Post(
 			"/routes",
-			handler.GenerateRoute(publicDomain, routes, authService, jwt.Secret(jwtSecret)),
-		)
-		r.Get(
-			"/routes",
-			handler.RetrieveRoute(publicDomain, routes, jwt.Secret(jwtSecret)),
+			handler.GenerateRoute(publicDomain, routes, authService, jwt),
 		)
 
 		// Pages rendering
@@ -327,7 +327,7 @@ var app = &cli.App{
 		server := proxyssh.NewServer(
 			sshListenAddress,
 			&config,
-			jwt.Secret(jwtSecret),
+			jwt,
 			routes,
 			publicDomain,
 			anonymous,

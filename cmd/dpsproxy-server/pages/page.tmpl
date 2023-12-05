@@ -40,13 +40,15 @@
   }
 
   /**
-   * @param {bool} retrieve - Retrieve route instead of generating it.
+   * @param {FormDataEvent} event
    * @returns {Promise<string>}
    */
-  async function login(retrieve) {
+  async function login(event) {
     if (typeof window.ethereum === 'undefined') {
       alert('Metamask not detected');
     }
+    const formData = new FormData(event.target);
+    const params = new URLSearchParams(formData);
     try {
       // Fetch account
       const accounts = await window.ethereum.request({
@@ -70,7 +72,7 @@
         data: Array.from(challengeBytes),
         sig: Array.from(hexStringToBytes(sig)),
       };
-      resp = await fetch(`/routes?retrieve=${retrieve}`, {
+      resp = await fetch(`/routes?${params.toString()}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -98,6 +100,7 @@
           {{ .RouteCount }} route{{ if gt .RouteCount 1 }}s{{ end }}
           allocated.
         </h3>
+        <h3>Only one route per user.</h3>
       </hgroup>
     </header>
 

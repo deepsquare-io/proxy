@@ -5,12 +5,14 @@
 package database
 
 import (
+	"database/sql"
 	"time"
 )
 
 type Nonce struct {
 	Nonce      string
 	Expiration time.Time
+	Ref        sql.NullString
 }
 
 type Route struct {

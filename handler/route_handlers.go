@@ -47,13 +47,16 @@ func GenerateRoute(
 	publicDomain string,
 	routes route.Repository,
 	auth *auth.Auth,
-	jwtSecret jwt.Secret,
+	jwt jwt.Service,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		refresh := false
+		generate, remember := false, false
 		args := r.URL.Query()
-		if args.Get("retrieve") == "true" {
-			refresh = true
+		if args.Get("generate") == "true" {
+			generate = true
+		}
+		if args.Get("remember") == "true" || args.Get("remember") == "on" {
+			remember = true
 		}
 
 		var rep ethResponse
@@ -90,20 +93,12 @@ func GenerateRoute(
 		}
 
 		// Create a session key
-		claims, token, err := jwtSecret.GenerateToken(address, address)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		claims, token := jwt.GenerateToken(r.Context(), address, address, remember)
 
 		var route string
 		var port int64
-		if refresh {
-			r, err := routes.GetByUserAddress(r.Context(), rep.Address)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
+		if !generate {
+			r, _ := routes.GetByUserAddress(r.Context(), rep.Address)
 			route = r.Route
 			port = r.Port
 		}
@@ -116,37 +111,5 @@ func GenerateRoute(
 		}
 
 		fmt.Fprint(w, formatResponse(publicDomain, route, port, token, claims.ExpiresAt.Time))
-	}
-}
-
-// RetrieveRoute fetch the route based on the token.
-func RetrieveRoute(
-	publicDomain string,
-	routes route.Repository,
-	jwtSecret jwt.Secret,
-) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		args := r.URL.Query()
-
-		token := args.Get("token")
-
-		// Verify token
-		claims, err := jwtSecret.VerifyToken(token)
-		if err != nil {
-			http.Error(
-				w,
-				fmt.Sprintf("token verification failed: %s", err),
-				http.StatusBadRequest,
-			)
-			return
-		}
-
-		rr, err := routes.GetByUserAddress(r.Context(), claims.UserID)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		fmt.Fprint(w, formatResponse(publicDomain, rr.Route, rr.Port, token, claims.ExpiresAt.Time))
 	}
 }

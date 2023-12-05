@@ -1,16 +1,25 @@
 {{define "GenerateRoute"}}
-<div>
-  <button
-    id="generate"
-    _="on click call login(false) then set #response.innerHTML to it then set the *display of #response to 'block'"
+<form
+  id="generate-route"
+  _="on submit halt the event
+  call login(event)
+  set #response.innerHTML to it
+  set the *display of #response to 'block'"
+>
+  <div>
+    <input type="checkbox" name="generate" />
+    <label for="remember">Generate new route.</label>
+  </div>
+  <small>Generating a new route will remove the old one.</small>
+  <div>
+    <input type="checkbox" name="remember" />
+    <label for="remember">Long-lived token.</label>
+  </div>
+  <small
+    >Do not share the long-lived token. A third party could re-use this token to
+    hijack the route. Fetching a new route will delete old tokens. Generated
+    token and established connections persist after the token is expired.</small
   >
-    Generate Route
-  </button>
-  <button
-    id="retrieve"
-    _="on click call login(true) then set #response.innerHTML to it then set the *display of #response to 'block'"
-  >
-    Retrieve Route
-  </button>
-</div>
+  <input type="submit" value="Fetch route" />
+</form>
 {{ end }}

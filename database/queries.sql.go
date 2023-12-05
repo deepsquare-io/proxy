@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
@@ -22,16 +23,17 @@ func (q *Queries) CountRoute(ctx context.Context) (int64, error) {
 }
 
 const createNonce = `-- name: CreateNonce :exec
-INSERT INTO nonces (nonce, expiration) VALUES (?, ?)
+INSERT INTO nonces (nonce, expiration, ref) VALUES (?, ?, ?)
 `
 
 type CreateNonceParams struct {
 	Nonce      string
 	Expiration time.Time
+	Ref        sql.NullString
 }
 
 func (q *Queries) CreateNonce(ctx context.Context, arg CreateNonceParams) error {
-	_, err := q.db.ExecContext(ctx, createNonce, arg.Nonce, arg.Expiration)
+	_, err := q.db.ExecContext(ctx, createNonce, arg.Nonce, arg.Expiration, arg.Ref)
 	return err
 }
 
@@ -50,8 +52,17 @@ func (q *Queries) CreateRoute(ctx context.Context, arg CreateRouteParams) error 
 	return err
 }
 
+const deleteNoncesByRef = `-- name: DeleteNoncesByRef :exec
+DELETE FROM nonces WHERE ref = ?
+`
+
+func (q *Queries) DeleteNoncesByRef(ctx context.Context, ref sql.NullString) error {
+	_, err := q.db.ExecContext(ctx, deleteNoncesByRef, ref)
+	return err
+}
+
 const getNonce = `-- name: GetNonce :one
-SELECT nonce, expiration FROM nonces WHERE nonce = ? AND expiration > ? LIMIT 1
+SELECT nonce, expiration, ref FROM nonces WHERE nonce = ? AND expiration > ? LIMIT 1
 `
 
 type GetNonceParams struct {
@@ -62,7 +73,7 @@ type GetNonceParams struct {
 func (q *Queries) GetNonce(ctx context.Context, arg GetNonceParams) (Nonce, error) {
 	row := q.db.QueryRowContext(ctx, getNonce, arg.Nonce, arg.Expiration)
 	var i Nonce
-	err := row.Scan(&i.Nonce, &i.Expiration)
+	err := row.Scan(&i.Nonce, &i.Expiration, &i.Ref)
 	return i, err
 }
 
