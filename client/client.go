@@ -137,7 +137,7 @@ func (c *BoreClient) Run(ctx context.Context) error {
 
 			go func() {
 				if err := handleClient(ctx, local, client); err != nil {
-					if !errors.Is(err, context.Canceled) && errors.Is(err, io.EOF) {
+					if !errors.Is(err, context.Canceled) && !errors.Is(err, io.EOF) {
 						log.Err(err).Msg("connection ended with error")
 					}
 				}
@@ -157,14 +157,14 @@ func handleClient(ctx context.Context, local net.Conn, remote net.Conn) error {
 
 	// Pipe local stdout to remote stdin
 	g.Go(func() error {
-		_, err := io.Copy(local, remote)
-		return err
+		_, _ = io.Copy(local, remote)
+		return io.EOF
 	})
 
 	// Pipe local stdout to remote stdin
 	g.Go(func() error {
-		_, err := io.Copy(remote, local)
-		return err
+		_, _ = io.Copy(remote, local)
+		return io.EOF
 	})
 
 	<-ctx.Done()

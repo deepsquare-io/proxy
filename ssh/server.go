@@ -166,14 +166,20 @@ func (s *Server) Serve(ctx context.Context) error {
 
 			g, ctx := errgroup.WithContext(ctx)
 			g.Go(func() error {
-				return client.handleRequests(ctx, sshConn, reqs)
+				if err := client.handleRequests(ctx, sshConn, reqs); err != nil && err != io.EOF &&
+					errors.Is(err, context.Canceled) {
+					client.log.Err(err).Msg("ssh requests ended in error")
+				}
+				return io.EOF
 			})
 			g.Go(func() error {
-				return client.handleChannels(chans)
+				if err := client.handleChannels(chans); err != nil && err != io.EOF &&
+					errors.Is(err, context.Canceled) {
+					client.log.Err(err).Msg("ssh channels ended in error")
+				}
+				return io.EOF
 			})
-			if err := g.Wait(); err != nil {
-				log.Err(err).Msg("client connection ended with err")
-			}
+			_ = g.Wait()
 		}()
 	}
 }
@@ -261,6 +267,7 @@ func (c *client) handleTCPIPForward(
 		port = r.Port
 	} else {
 		if c.anonymous {
+			c.log.Warn().Msg("anonymous login")
 			route = utils.GenerateSubdomain()
 			port = utils.GenerateSafeRandomPort()
 		} else {
@@ -341,6 +348,9 @@ func (c *client) handleTCPIPForward(
 			}
 			defer ch.Close()
 
+			c.log.Info().Any("payload", p).Msg("tcpip forwarding connection start")
+			defer c.log.Info().Any("payload", p).Msg("tcpip forwarding connection closed")
+
 			g, ctx := errgroup.WithContext(ctx)
 			g.Go(func() error {
 				ssh.DiscardRequests(reqs)
@@ -350,31 +360,25 @@ func (c *client) handleTCPIPForward(
 				return c.pipe(ctx, ch, conn)
 			})
 
-			// Exit when everything is done
-			if err := g.Wait(); err != nil {
-				c.log.Err(err).Msg("tcpip forwarding connection ended with err")
-			}
+			// Exit on first error
+			<-ctx.Done()
 		}()
 	}
 }
 
 func (c *client) pipe(ctx context.Context, ch ssh.Channel, conn net.Conn) error {
-	defer func() {
-		c.log.Info().Msg("pipe closed")
-	}()
-
 	g, ctx := errgroup.WithContext(ctx)
 
 	// Pipe local stdout to remote stdin
 	g.Go(func() error {
-		_, err := io.Copy(ch, conn)
-		return err
+		_, _ = io.Copy(ch, conn)
+		return io.EOF
 	})
 
 	// Pipe local stdout to remote stdin
 	g.Go(func() error {
-		_, err := io.Copy(conn, ch)
-		return err
+		_, _ = io.Copy(conn, ch)
+		return io.EOF
 	})
 
 	// Exit on first error
@@ -400,16 +404,21 @@ func (s *Server) ForwardHTTP(next http.Handler) http.Handler {
 						Scheme: "ws",
 						Host:   addr,
 					}
-					proxy := wsutil.NewSingleHostReverseProxy(url)
-					proxy.ServeHTTP(w, r)
+					wsutil.NewSingleHostReverseProxy(url).ServeHTTP(w, r)
 					return
 				}
 
 				url := &url.URL{Scheme: "http", Host: addr}
-				proxy := httputil.NewSingleHostReverseProxy(url)
-				proxy.ServeHTTP(w, r)
+				httputil.NewSingleHostReverseProxy(url).ServeHTTP(w, r)
 				return
 			}
+
+			url := &url.URL{
+				Scheme: r.URL.Scheme,
+				Host:   s.domain,
+			}
+			http.Redirect(w, r, url.String(), http.StatusMovedPermanently)
+			return
 		}
 
 		next.ServeHTTP(w, r)
