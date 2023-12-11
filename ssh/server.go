@@ -151,6 +151,7 @@ func (s *Server) Serve(ctx context.Context) error {
 			sshConn, chans, reqs, err := ssh.NewServerConn(conn, s.ServerConfig)
 			if err != nil {
 				log.Warn().Err(err).Msg("ssh failure")
+				return
 			}
 			defer sshConn.Close()
 			client := &client{

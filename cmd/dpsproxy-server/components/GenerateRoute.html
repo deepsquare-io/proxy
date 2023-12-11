@@ -17,8 +17,9 @@
   </div>
   <small
     >Do not share the long-lived token. A third party could re-use this token to
-    hijack the route. Fetching a new route will delete old tokens. Generated
-    token and established connections persist after the token is expired.</small
+    hijack the route. As a security measure, fetching a route will delete old
+    tokens. Note also that established connections persist after the token is
+    expired.</small
   >
   <input type="submit" value="Fetch route" />
 </form>
