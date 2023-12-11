@@ -77,9 +77,11 @@ var app = &cli.App{
 					if errors.Is(err, io.EOF) {
 						return nil
 					}
-					log.Err(err).Msg("client failure")
 					select {
+					case <-time.After(time.Second):
+						continue
 					case <-time.After(time.Second * 10):
+						log.Err(err).Msg("client failure")
 						continue
 					case <-ctx.Done():
 						return err
